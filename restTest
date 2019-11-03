@@ -1,0 +1,131 @@
+#! /usr/bin/python3
+
+import MySQLdb
+import passwords
+import cgi
+import cgitb
+import os
+import json
+cgitb.enable()
+
+form = cgi.FieldStorage()
+
+try:
+	testPath = os.environ['PATH_INFO'].strip('/')
+except:
+	testPath = ""
+print("Content-Type: text/html")
+
+if "cpuName" in form or "company" in form or "cores" in form or "boost" in form:
+	try:
+		currCPU = form["cpuName"].value
+		currComp = form["company"].value
+		currCores = form["cores"].value
+		currClocks = form["boost"].value
+	except:
+		print("Status: 302 Redirect")
+		print("Location: /cgi-bin/restTest/post")
+
+	conn = MySQLdb.connect(host = passwords.SQL_HOST,
+	user = passwords.SQL_USER,
+	passwd = passwords.SQL_PASSWD,
+	db = "kaz_data")
+
+	cursor = conn.cursor()
+	try:
+		cursor.execute('''INSERT INTO kaz_table(processor, company, cores, boost) VALUES (%s, %s, %s, %s);''', (currCPU, currComp, currCores, currClocks))
+		new_id = cursor.lastrowid
+		cursor.close()
+		conn.commit()
+		conn.close()
+		print("Status: 302 Redirect")
+		print("Location: /cgi-bin/restTest/cpus/" + str(new_id))
+		print()
+	except:
+		print("Status: 200 OK")
+		print()
+		print('''INSERT INTO kaz_table(processor, company, cores, boost) VALUES (%s, %s, %s, %s);'''% (currCPU, currComp, currCores, currClocks))
+	print("""
+	""")
+elif testPath == "go_back":
+	print("Status: 302 Redirect")
+	print("Location: /index.html")
+	print("""
+	""")
+elif testPath == "json_path":
+	x =  [1,2,30,20, {"foo": "bar"}]
+	x_json = json.dumps(x, indent=2)
+	print("Content-Type: application/json")
+	print("Status: 200 OK")
+	print()
+	print(x_json)
+elif testPath == "post":
+	print("Status: 200 OK")
+	print()
+	print('''<br>
+	<form action = "/cgi-bin/restTest" method="get">
+	<br>CPU Name:<br>
+	<input type=text name = cpuName value=""><br>
+	<br>Company Name:<br>
+	<input type=text name = company value=""><br>
+	<br>Number of cores:<br>
+	<input type=text name = cores value=""><br>
+	<br>Max Boost Clock Speed:<br>
+	<input type=text name = boost value=""><br><br>
+	<input type = submit name = add value = "Submit">
+	</form>''')
+
+elif testPath[0:4] == "cpus":
+
+	conn = MySQLdb.connect(host = passwords.SQL_HOST,
+	user = passwords.SQL_USER,
+	passwd = passwords.SQL_PASSWD,
+	db = "kaz_data")
+	cursor = conn.cursor()
+
+	if (len(testPath) > 4):
+		splitPath = testPath.split('/')
+		try:
+			cursor.execute("SELECT * FROM kaz_table WHERE id = " + splitPath[1] + ";")
+		except:
+			cursor.execute("SELECT * FROM kaz_table;")
+	else:
+		cursor.execute("SELECT * FROM kaz_table;")
+	allCPU = cursor.fetchall()
+
+	listCPUs = []
+	for rec in allCPU:
+		currDict = dict()
+		currDict["id"] = rec[0]
+		currDict["processor"] = rec[1]
+		currDict["company"] = rec[2]
+		currDict["cores"] = rec[3]
+		currDict["boost"] = rec[4]
+		currDict["url"] = "http://ec2-107-22-33-74.compute-1.amazonaws.com/cgi-bin/restTest/" + str(rec[0])
+		listCPUs.append(currDict)
+	allCPU_json = json.dumps(listCPUs, indent=2)
+
+	print("Content-Type: application/json")
+	print("Status: 200 OK")
+	print()
+	print(allCPU_json)
+else:
+	print("Status: 200 OK")
+	print()
+	print("""<html>
+	<header><title>Rest Test</title></header>
+	<body>
+	<br>
+	""")
+	print("""<br><br><a href = "/index.html">Home Page</a><br><br><br><br>""")
+
+	print("<br>Rest Tester<br><br>")
+	print("""<br><a href = "/cgi-bin/restTest/cpus">List of CPUs</a><br>""")
+	print("""<br><a href = "/cgi-bin/restTest/post">Add CPU</a><br>""")
+
+	if (testPath == "magic_page"):
+		print("This is the secret message")
+
+	print("""
+	</html>
+	""")
